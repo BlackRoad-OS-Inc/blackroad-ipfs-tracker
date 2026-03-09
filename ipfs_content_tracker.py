@@ -7,6 +7,7 @@ Production-grade IPFS content management with SQLite persistence.
 import sqlite3
 import json
 import hashlib
+import logging
 import subprocess
 import urllib.request
 import urllib.error
@@ -19,6 +20,8 @@ import datetime
 from dataclasses import dataclass, asdict, field
 from typing import Optional, List, Dict, Any
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 DB_PATH = os.environ.get("IPFS_TRACKER_DB", os.path.expanduser("~/.blackroad/ipfs_tracker.db"))
@@ -43,6 +46,10 @@ class Content:
     gateway_url: str
     created_at: str
 
+    def __post_init__(self) -> None:
+        # SQLite stores booleans as INTEGER; normalise to Python bool.
+        self.pinned = bool(self.pinned)
+
     @classmethod
     def from_row(cls, row: tuple) -> "Content":
         return cls(*row)
@@ -58,7 +65,7 @@ def _generate_id(cid: str) -> str:
 
 
 def _now() -> str:
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +154,7 @@ def _ipfs_pin_add(cid: str, api_url: str = "http://127.0.0.1:5001") -> bool:
                 data = json.loads(resp.read())
                 return cid in data.get("Pins", [])
         except Exception as exc:
-            print(f"  [warn] HTTP API pin failed: {exc}", file=sys.stderr)
+            logger.warning("HTTP API pin failed: %s", exc)
 
     if _ipfs_available():
         result = subprocess.run(
@@ -169,7 +176,7 @@ def _ipfs_pin_rm(cid: str, api_url: str = "http://127.0.0.1:5001") -> bool:
                 data = json.loads(resp.read())
                 return cid in data.get("Pins", [])
         except Exception as exc:
-            print(f"  [warn] HTTP API unpin failed: {exc}", file=sys.stderr)
+            logger.warning("HTTP API unpin failed: %s", exc)
 
     if _ipfs_available():
         result = subprocess.run(
@@ -218,7 +225,7 @@ def add_content(
     size_bytes: int = 0,
     content_type: str = "application/octet-stream",
     description: str = "",
-    tags: List[str] = None,
+    tags: Optional[List[str]] = None,
     auto_pin: bool = False,
     db_path: str = DB_PATH,
 ) -> Content:
@@ -376,13 +383,22 @@ def get_content(content_id: str, db_path: str = DB_PATH) -> Optional[Content]:
     return None
 
 
+def _escape_like(s: str) -> str:
+    """Escape SQL LIKE special characters so user input is treated literally."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def search(query: str, db_path: str = DB_PATH) -> List[Content]:
     """Search content by name, description, or tags."""
     conn = get_db(db_path)
-    pattern = f"%{query}%"
+    escaped = _escape_like(query)
+    pattern = f"%{escaped}%"
     rows = conn.execute("""
         SELECT * FROM content
-        WHERE name LIKE ? OR description LIKE ? OR tags LIKE ? OR cid LIKE ?
+        WHERE name LIKE ? ESCAPE '\\'
+           OR description LIKE ? ESCAPE '\\'
+           OR tags LIKE ? ESCAPE '\\'
+           OR cid LIKE ? ESCAPE '\\'
         ORDER BY created_at DESC
     """, (pattern, pattern, pattern, pattern)).fetchall()
     return [Content(*tuple(r)) for r in rows]
@@ -585,17 +601,29 @@ def cli_main(argv: List[str] = None) -> int:
         _print_content(c)
 
     elif args.cmd == "pin":
-        ok = pin_content(args.content_id, db_path=args.db)
+        try:
+            ok = pin_content(args.content_id, db_path=args.db)
+        except ValueError as exc:
+            print(f"✗ {exc}", file=sys.stderr)
+            return 1
         print(f"{'✓ Pinned' if ok else '✗ Pin failed'} {args.content_id}")
         return 0 if ok else 1
 
     elif args.cmd == "unpin":
-        ok = unpin_content(args.content_id, db_path=args.db)
+        try:
+            ok = unpin_content(args.content_id, db_path=args.db)
+        except ValueError as exc:
+            print(f"✗ {exc}", file=sys.stderr)
+            return 1
         print(f"{'✓ Unpinned' if ok else '✗ Unpin failed'} {args.content_id}")
         return 0 if ok else 1
 
     elif args.cmd == "verify":
-        result = verify_availability(args.content_id, gateways=args.gateways, db_path=args.db)
+        try:
+            result = verify_availability(args.content_id, gateways=args.gateways, db_path=args.db)
+        except ValueError as exc:
+            print(f"✗ {exc}", file=sys.stderr)
+            return 1
         print(f"CID: {result['cid']}")
         print(f"Reachable via {result['gateways_available']}/{result['gateways_checked']} gateways")
         for r in result["results"]:

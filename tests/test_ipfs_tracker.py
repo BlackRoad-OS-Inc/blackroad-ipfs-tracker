@@ -5,7 +5,7 @@ import pytest
 from ipfs_content_tracker import (
     add_content, get_content, list_content, search, pin_content, unpin_content,
     export_manifest, bulk_import_from_json, delete_content, stats, get_db,
-    _generate_id,
+    _generate_id, cli_main,
 )
 
 FAKE_CID_1 = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"
@@ -228,3 +228,50 @@ def test_multiple_tags_filter(tmp_db):
     add_content(FAKE_CID_3, tags=["tag5"], db_path=tmp_db)
     assert len(list_content(tag="tag2", db_path=tmp_db)) == 2
     assert len(list_content(tag="tag5", db_path=tmp_db)) == 1
+
+
+def test_pinned_field_is_bool_when_read_from_db(tmp_db):
+    """Content.pinned must be a Python bool (not int) when loaded from SQLite."""
+    add_content(FAKE_CID_1, db_path=tmp_db)
+    conn = get_db(tmp_db)
+    conn.execute("UPDATE content SET pinned = 1 WHERE id = ?", (_generate_id(FAKE_CID_1),))
+    conn.commit()
+    c = list_content(db_path=tmp_db)[0]
+    assert c.pinned is True
+    assert c.to_dict()["pinned"] is True
+
+
+def test_search_like_wildcard_not_expanded(tmp_db):
+    """'%' and '_' in search query must not act as SQL wildcards."""
+    add_content(FAKE_CID_1, name="annual-report", db_path=tmp_db)
+    add_content(FAKE_CID_2, name="photo-album", db_path=tmp_db)
+    assert search("%", db_path=tmp_db) == []
+    assert search("_", db_path=tmp_db) == []
+    # Normal text search should still work
+    assert len(search("annual", db_path=tmp_db)) == 1
+
+
+def test_cli_pin_not_found_returns_error(tmp_db, capsys):
+    """CLI 'pin' with unknown ID should print an error and return exit code 1."""
+    ret = cli_main(["pin", "nonexistent", "--db", tmp_db])
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "nonexistent" in captured.err
+
+
+def test_cli_unpin_not_found_returns_error(tmp_db, capsys):
+    """CLI 'unpin' with unknown ID should print an error and return exit code 1."""
+    ret = cli_main(["unpin", "nonexistent", "--db", tmp_db])
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "nonexistent" in captured.err
+
+
+def test_now_is_utc_isoformat():
+    """_now() must return a UTC ISO-8601 string ending with 'Z'."""
+    from ipfs_content_tracker import _now
+    s = _now()
+    assert s.endswith("Z")
+    assert "T" in s
+    # Must not contain timezone offset like +00:00
+    assert "+00:00" not in s
