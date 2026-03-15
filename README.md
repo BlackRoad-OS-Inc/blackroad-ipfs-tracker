@@ -1,52 +1,41 @@
+<div align="center">
+
+<img src="https://images.blackroad.io/pixel-art/road-logo.png" alt="BlackRoad OS" width="80" />
+
 # blackroad-ipfs-tracker
 
-Production-grade IPFS content tracker with SQLite persistence, gateway availability checks, and manifest export.
+**Production IPFS content tracker: CID management, pin/unpin, gateway availability, manifest export. SQLite.**
 
-## Features
+[![BlackRoad OS](https://img.shields.io/badge/BlackRoad_OS-Pave_Tomorrow-FF2255?style=for-the-badge&labelColor=000000)](https://blackroad.io)
+[![License](https://img.shields.io/badge/License-Proprietary-FF6B2B?style=for-the-badge&labelColor=000000)](./LICENSE)
+[![Edge AI](https://img.shields.io/badge/Edge_AI-52_TOPS-00D4FF?style=for-the-badge&labelColor=000000)](https://github.com/BlackRoad-OS-Inc)
 
-- Track IPFS CIDs with rich metadata (name, type, tags, description)
-- Pin/unpin via IPFS HTTP API or CLI daemon
-- Verify availability across multiple public gateways
-- Full-text search across tracked content
-- Bulk import from JSON manifests
-- Export manifest for backup/migration
-- SQLite persistence in `~/.blackroad/ipfs_tracker.db`
+</div>
 
-## Usage
+<div align="center">
+<sub>Part of the <a href="https://blackroad.io">BlackRoad OS</a> ecosystem — sovereign edge AI infrastructure</sub>
+</div>
 
-```bash
-# Add a CID
-python ipfs_content_tracker.py add QmYwAP... --name "my-doc.pdf" --tags "archive,2024" --pin
+---
 
-# List all tracked content
-python ipfs_content_tracker.py list
+## Overview
 
-# Verify availability
-python ipfs_content_tracker.py verify <content-id>
+Production IPFS content tracker: CID management, pin/unpin, gateway availability, manifest export. SQLite.
 
-# Search
-python ipfs_content_tracker.py search "quarterly report"
+## License
 
-# Export manifest
-python ipfs_content_tracker.py export --output manifest.json
+**Proprietary** — Copyright © 2024–2026 [BlackRoad OS, Inc.](https://blackroad.io) All rights reserved.
 
-# Bulk import
-python ipfs_content_tracker.py import manifest.json
+Founder & CEO: **Alexa Louise Amundson** · Delaware C-Corp
 
-# Statistics
-python ipfs_content_tracker.py stats
-```
+See [LICENSE](./LICENSE) for full terms.
 
-## Testing
+---
 
-```bash
-pip install pytest
-pytest tests/ -v
-```
+<div align="center">
 
-## Architecture
+**BlackRoad OS — Pave Tomorrow.**
 
-- **`ipfs_content_tracker.py`** — Core library + CLI (400+ lines)
-- **SQLite tables**: `content`, `pin_events`, `availability_checks`
-- **Gateway support**: ipfs.io, cloudflare-ipfs, pinata, dweb.link
-- **IPFS integration**: Checks local daemon at `http://127.0.0.1:5001` or `ipfs` CLI
+[blackroad.io](https://blackroad.io) · [GitHub](https://github.com/BlackRoad-OS-Inc) · [Brand](https://brand.blackroad.io)
+
+</div>
